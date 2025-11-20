@@ -79,7 +79,6 @@ class UserDatabase:
     
     def add_friend_request(self, from_user, to_user):
         """Add a friend request - from_user requests to be friends with to_user"""
-        print(f"DEBUG: Adding friend request from {from_user} to {to_user}")
         conn = sqlite3.connect(self.db_name)
         c = conn.cursor()
         # Store the request in both directions for easier querying
@@ -91,7 +90,6 @@ class UserDatabase:
 
     def accept_friend_request(self, accepting_user, requesting_user):
         """Accept a friend request - accepting_user accepts request from requesting_user"""
-        print(f"DEBUG: {accepting_user} accepting friend request from {requesting_user}")
         conn = sqlite3.connect(self.db_name)
         c = conn.cursor()
     
@@ -111,7 +109,6 @@ class UserDatabase:
     
         conn.commit()
         conn.close()
-        print(f"DEBUG: Created friendship between {user1} and {user2}")
 
     def get_friends(self, username):
         """Get all accepted friends for a user"""
@@ -130,7 +127,6 @@ class UserDatabase:
         conn.close()
         # Remove duplicates and return sorted list
         unique_friends = sorted(list(set(friends)))
-        print(f"DEBUG: get_friends({username}) = {unique_friends}")
         return unique_friends
 
     def get_pending_requests(self, username):
@@ -143,7 +139,6 @@ class UserDatabase:
         pending = [row[0] for row in c.fetchall()]
         conn.close()
         unique_pending = sorted(list(set(pending)))
-        print(f"DEBUG: get_pending_requests({username}) = {unique_pending}")
         return unique_pending
     
     def store_message(self, message):

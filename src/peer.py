@@ -124,17 +124,16 @@ class P2PChatPeer:
             return
         
         print(f"Received {message.msg_type} message from {message.sender}")
-    
+
         # Store peer information from any message (but only if we don't already know them)
         if (hasattr(message, 'sender') and message.sender and 
             message.sender.lower() not in self.known_peers):
             try:
                 peer_addr = client_socket.getpeername()
                 self.known_peers[message.sender.lower()] = (peer_addr[0], peer_addr[1])
-                print(f"📡 Learned about peer: {message.sender} at {peer_addr[0]}:{peer_addr[1]}")
             except:
                 pass
-    
+
         # Route messages intended for specific users
         if (message.recipient and 
             message.recipient.lower() != self.username and 
@@ -144,7 +143,7 @@ class P2PChatPeer:
                 message._forwarded = True  # Mark as forwarded to prevent loops
                 self.send_direct_message(message.recipient, message)
             return
-    
+
         # Process messages intended for us
         if message.msg_type == MSG_TEXT:
             self._handle_text_message(message)
@@ -187,7 +186,7 @@ class P2PChatPeer:
     def _handle_friend_accept(self, message: Message):
         """Handle friend acceptance"""
         friend = message.sender.lower()  # Normalize case
-    
+
         # Don't process our own messages
         if friend == self.username:
             return
@@ -195,22 +194,13 @@ class P2PChatPeer:
         print(f"\n✅ FRIEND REQUEST ACCEPTED by {friend}!")
         print(f"   You are now friends with {friend}")
         print(f"   You can now send messages: msg {friend} [your message]\n")
-    
-        # CRITICAL FIX: Update friendship status in OUR database too
-        # This records that we have accepted their friendship
+
+        # Update friendship status in OUR database too
         self.db.accept_friend_request(friend, self.username)
-    
+
         # Also add the friend to our user database with their connection info
         self.db.add_user(friend, ip=message.content.get('ip'), 
                         port=message.content.get('port'))
-    
-        # Verify the friendship was recorded in BOTH directions
-        time.sleep(0.1)  # Small delay for database
-        our_friends = self.db.get_friends(self.username)
-        if friend in our_friends:
-            print(f"   ✅ Friendship with {friend} confirmed in our database")
-        else:
-            print(f"   ❌ Friendship with {friend} NOT found in our database - this is a problem!")
     
     def _handle_group_message(self, message: Message):
         """Handle group message"""
@@ -244,7 +234,6 @@ class P2PChatPeer:
         
         if peer_username != self.username and peer_ip and peer_port:
             self.known_peers[peer_username] = (peer_ip, peer_port)
-            print(f"📡 Discovered peer: {peer_username} at {peer_ip}:{peer_port}")
     
     def _handle_user_lookup(self, message: Message):
         """Handle user lookup requests"""
@@ -270,11 +259,11 @@ class P2PChatPeer:
     def _find_user_connection(self, username):
         """Find the socket connection for a specific user"""
         username_lower = username.lower()
-    
+
         # Don't look up ourselves
         if username_lower == self.username:
             return None
-    
+
         # Check if we know this user's address
         if username_lower in self.known_peers:
             ip, port = self.known_peers[username_lower]
@@ -285,32 +274,29 @@ class P2PChatPeer:
                 return self.connected_peers[peer_id]
         
             # Only try to connect if we're not already connected to this peer
-            # and it's not ourselves
             if (ip, port) != (self.ip, self.port):
                 if self.connect_to_peer(ip, port, max_retries=1, retry_delay=0):
                     return self.connected_peers.get(peer_id)
     
-        # Only send lookup for important messages, not for discovery messages
         return None
     
     def send_direct_message(self, target_username, message):
         """Send message directly to a specific user if possible"""
         target_username = target_username.lower()
-    
+
         # Don't try to send to ourselves
         if target_username == self.username:
             return True
-    
+
         # Try to find direct connection first
         target_socket = self._find_user_connection(target_username)
-    
+
         if target_socket and target_socket.fileno() != -1:
             try:
                 message_json = message.to_json().encode(ENCODING)
                 target_socket.send(message_json)
                 return True
             except Exception as e:
-                print(f"⚠️  Direct send failed: {e}")
                 # Remove broken connection
                 to_remove = []
                 for peer_id, sock in self.connected_peers.items():
@@ -318,11 +304,11 @@ class P2PChatPeer:
                         to_remove.append(peer_id)
                 for peer_id in to_remove:
                     del self.connected_peers[peer_id]
-    
+
         # For certain message types, don't broadcast to avoid loops
         if message.msg_type in [MSG_USER_LOOKUP, MSG_PEER_DISCOVERY]:
             return False
-    
+
         # Fallback: broadcast and let recipients filter
         self._broadcast_message(message)
         return False
@@ -429,10 +415,10 @@ class P2PChatPeer:
         """Send message to a friend"""
         # Convert to lowercase for consistency
         friend_username = friend_username.lower()
-    
+
         # Double-check friendship status with a small delay to ensure database is updated
-        time.sleep(0.1)  # Small delay to ensure database operations complete
-    
+        time.sleep(0.1)
+
         # Check if friend is in database
         friends = self.db.get_friends(self.username)
         if friend_username not in friends:
@@ -440,11 +426,11 @@ class P2PChatPeer:
             print(f"   Your current friends: {friends}")
             print(f"   Send a friend request first: friend {friend_username}")
             return
-    
+
         # Create message
         message = Message(MSG_TEXT, self.username, text, friend_username)
         self.db.store_message(message)
-    
+
         # Send directly if possible, otherwise broadcast
         if not self.send_direct_message(friend_username, message):
             print(f"⚠️  Friend {friend_username} not directly connected. Message sent to network.")
@@ -491,40 +477,32 @@ class P2PChatPeer:
         """Accept a friend request from the specified user"""
         # Convert to lowercase for consistency
         friend_username = friend_username.lower()
-    
+
         # Don't accept self
         if friend_username == self.username:
             print("❌ You cannot accept a friend request from yourself!")
             return
-    
+
         # Check if request exists
         pending = self.db.get_pending_requests(self.username)
         if friend_username not in pending:
             print(f"❌ No pending friend request from {friend_username}!")
             print(f"   Your pending requests: {pending}")
             return
-    
-        # Accept the request - CORRECTED: accepting_user, requesting_user
+
+        # Accept the request
         self.db.accept_friend_request(self.username, friend_username)
-    
+
         # Send acceptance message
         message = Message(MSG_FRIEND_ACCEPT, self.username,
                      {"ip": self.ip, "port": self.port},
                      friend_username)
-    
+
         # Send directly if possible, otherwise broadcast
         if not self.send_direct_message(friend_username, message):
             print(f"⚠️  User {friend_username} not directly connected. Acceptance sent to network.")
         else:
             print(f"✅ Accepted friend request from {friend_username}")
-    
-        # Verify the friendship was recorded
-        time.sleep(0.1)  # Small delay for database
-        friends = self.db.get_friends(self.username)
-        if friend_username in friends:
-            print(f"   ✅ Friendship with {friend_username} confirmed in database")
-        else:
-            print(f"   ⚠️  Friendship with {friend_username} not found in database")
     
     def create_group(self, group_name, initial_members=None):
         """Create a new group chat"""
